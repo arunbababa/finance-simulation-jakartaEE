@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ローン返済シミュレーター</title>
+    <link rel="stylesheet" href="resources/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>💳 ローン返済シミュレーター</h1>
+        <p class="subtitle">利息制限法・貸金業法・割賦販売法に基づく返済シミュレーション</p>
+    </header>
+
+    <main>
+        <nav class="tabs">
+            <button class="tab active" data-tab="simulator">返済シミュレーション</button>
+            <button class="tab" data-tab="compare">返済方式比較</button>
+            <button class="tab" data-tab="legal">法的情報</button>
+            <button class="tab" data-tab="card">カード情報</button>
+        </nav>
+
+        <!-- 返済シミュレーション -->
+        <section id="simulator" class="tab-content active">
+            <form id="simulationForm">
+                <div class="form-group">
+                    <label for="principal">借入金額（円）</label>
+                    <input type="number" id="principal" name="principal" value="300000" min="1" required>
+                    <span class="hint" id="legalRateHint"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="annualRate">年利率（%）</label>
+                    <input type="number" id="annualRate" name="annualRate" value="15" min="0" max="20" step="0.1" required>
+                    <span class="hint">利息制限法により上限があります</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="repaymentType">返済方式</label>
+                    <select id="repaymentType" name="repaymentType" required>
+                        <option value="">読み込み中...</option>
+                    </select>
+                    <span class="description" id="repaymentDescription"></span>
+                </div>
+
+                <!-- 動的パラメータ -->
+                <div id="dynamicParams">
+                    <div class="form-group" id="termMonthsGroup" style="display: none;">
+                        <label for="termMonths">返済期間（ヶ月）</label>
+                        <input type="number" id="termMonths" name="termMonths" value="24" min="1" max="420">
+                    </div>
+
+                    <div class="form-group" id="monthlyPaymentGroup" style="display: none;">
+                        <label for="monthlyPayment">月々の返済額（円）</label>
+                        <input type="number" id="monthlyPayment" name="monthlyPayment" value="10000" min="1000">
+                    </div>
+
+                    <div class="form-group" id="repaymentRateGroup" style="display: none;">
+                        <label for="repaymentRate">返済率（%）</label>
+                        <input type="number" id="repaymentRate" name="repaymentRate" value="3" min="1" max="100" step="0.1">
+                        <span class="hint">残高の何%を毎月返済するか</span>
+                    </div>
+
+                    <div class="form-group" id="balanceSlideTypeGroup" style="display: none;">
+                        <label for="balanceSlideType">残高スライドタイプ</label>
+                        <select id="balanceSlideType" name="balanceSlideType">
+                            <option value="STANDARD">標準</option>
+                            <option value="EASY">ゆとり</option>
+                            <option value="QUICK">短期完済</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="installmentCountGroup" style="display: none;">
+                        <label for="installmentCount">分割回数</label>
+                        <select id="installmentCount" name="installmentCount">
+                            <option value="3">3回</option>
+                            <option value="6">6回</option>
+                            <option value="10">10回</option>
+                            <option value="12" selected>12回</option>
+                            <option value="15">15回</option>
+                            <option value="18">18回</option>
+                            <option value="20">20回</option>
+                            <option value="24">24回</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary">シミュレーション実行</button>
+            </form>
+
+            <div id="result" class="result-container" style="display: none;">
+                <h2>シミュレーション結果</h2>
+
+                <div id="rateWarning" class="warning" style="display: none;"></div>
+
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <span class="label">借入金額</span>
+                        <span class="value" id="resultPrincipal"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">適用金利（年率）</span>
+                        <span class="value" id="resultRate"></span>
+                    </div>
+                    <div class="summary-item highlight">
+                        <span class="label">総返済額</span>
+                        <span class="value" id="resultTotalPayment"></span>
+                    </div>
+                    <div class="summary-item highlight-red">
+                        <span class="label">総利息額</span>
+                        <span class="value" id="resultTotalInterest"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">返済期間</span>
+                        <span class="value" id="resultTerm"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">月々の返済額</span>
+                        <span class="value" id="resultMonthlyPayment"></span>
+                    </div>
+                </div>
+
+                <h3>月次返済明細</h3>
+                <div class="table-container">
+                    <table id="monthlyDetailsTable">
+                        <thead>
+                            <tr>
+                                <th>回数</th>
+                                <th>返済月</th>
+                                <th>返済額</th>
+                                <th>元金分</th>
+                                <th>利息分</th>
+                                <th>残高</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="legal-info">
+                    <h4>適用法令</h4>
+                    <ul id="applicableLaws"></ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 返済方式比較 -->
+        <section id="compare" class="tab-content">
+            <form id="compareForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="comparePrincipal">借入金額（円）</label>
+                        <input type="number" id="comparePrincipal" value="300000" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="compareRate">年利率（%）</label>
+                        <input type="number" id="compareRate" value="15" min="0" max="20" step="0.1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="compareTermMonths">返済期間（ヶ月）</label>
+                        <input type="number" id="compareTermMonths" value="24" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="compareMonthlyPayment">リボ月額（円）</label>
+                        <input type="number" id="compareMonthlyPayment" value="15000" min="1000">
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">比較する</button>
+            </form>
+
+            <div id="compareResult" class="result-container" style="display: none;">
+                <h2>返済方式の比較</h2>
+                <div class="table-container">
+                    <table id="compareTable">
+                        <thead>
+                            <tr>
+                                <th>返済方式</th>
+                                <th>総返済額</th>
+                                <th>総利息</th>
+                                <th>返済期間</th>
+                                <th>月額</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="insight">
+                    <h4>💡 ポイント</h4>
+                    <ul>
+                        <li>同じ借入金額でも返済方式によって総支払額が大きく異なります</li>
+                        <li>リボ払いは月々の負担が軽い反面、総利息が高くなりがちです</li>
+                        <li>元金均等返済は初期負担が大きいですが、総利息は少なくなります</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 法的情報 -->
+        <section id="legal" class="tab-content">
+            <div class="legal-cards">
+                <div class="legal-card">
+                    <h3>📜 利息制限法</h3>
+                    <p>昭和29年法律第100号</p>
+                    <table class="legal-table">
+                        <thead>
+                            <tr>
+                                <th>元本</th>
+                                <th>上限金利（年率）</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>10万円未満</td>
+                                <td>20%</td>
+                            </tr>
+                            <tr>
+                                <td>10万円以上〜100万円未満</td>
+                                <td>18%</td>
+                            </tr>
+                            <tr>
+                                <td>100万円以上</td>
+                                <td>15%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="note">超過した利息は無効となり、返還請求可能です（過払い金）</p>
+                    <a href="https://elaws.e-gov.go.jp/document?lawid=329AC0000000100" target="_blank" class="external-link">
+                        e-Gov法令検索で確認 →
+                    </a>
+                </div>
+
+                <div class="legal-card">
+                    <h3>📜 出資法</h3>
+                    <p>出資の受入れ、預り金及び金利等の取締りに関する法律</p>
+                    <ul>
+                        <li>貸金業者の上限金利: <strong>年20%</strong></li>
+                        <li>これを超えると刑事罰の対象</li>
+                        <li>5年以下の懲役もしくは1000万円以下の罰金</li>
+                    </ul>
+                    <a href="https://elaws.e-gov.go.jp/document?lawid=329AC0000000195" target="_blank" class="external-link">
+                        e-Gov法令検索で確認 →
+                    </a>
+                </div>
+
+                <div class="legal-card">
+                    <h3>📜 貸金業法</h3>
+                    <p>昭和58年法律第32号</p>
+                    <ul>
+                        <li><strong>総量規制</strong>: 個人向け貸付は年収の1/3まで</li>
+                        <li>指定信用情報機関への照会義務</li>
+                        <li>書面交付義務</li>
+                    </ul>
+                    <a href="https://elaws.e-gov.go.jp/document?lawid=358AC0000000032" target="_blank" class="external-link">
+                        e-Gov法令検索で確認 →
+                    </a>
+                </div>
+
+                <div class="legal-card">
+                    <h3>📜 割賦販売法</h3>
+                    <p>昭和36年法律第159号</p>
+                    <ul>
+                        <li>クレジットカードの分割払い・リボ払いを規制</li>
+                        <li>支払可能見込額の調査義務</li>
+                        <li>書面交付義務</li>
+                        <li>クーリングオフ制度</li>
+                    </ul>
+                    <a href="https://elaws.e-gov.go.jp/document?lawid=336AC0000000159" target="_blank" class="external-link">
+                        e-Gov法令検索で確認 →
+                    </a>
+                </div>
+
+                <div class="legal-card wide">
+                    <h3>📊 金利計算の基本</h3>
+                    <div class="formula">
+                        <h4>月利の計算</h4>
+                        <code>月利 = 年利 ÷ 12</code>
+                        <p>例: 年15% → 月1.25%</p>
+                    </div>
+                    <div class="formula">
+                        <h4>元利均等返済の月々返済額</h4>
+                        <code>PMT = P × r × (1 + r)^n ÷ ((1 + r)^n - 1)</code>
+                        <p>P: 元本, r: 月利, n: 返済回数</p>
+                    </div>
+                    <div class="formula">
+                        <h4>遅延損害金の上限</h4>
+                        <code>遅延損害金 ≦ 法定利息 × 1.46</code>
+                        <p>利息制限法第4条に基づく</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- カード情報 -->
+        <section id="card" class="tab-content">
+            <div class="card-demo">
+                <h2>🔐 カード情報のセキュリティ</h2>
+
+                <div class="security-guidelines">
+                    <div class="guideline-card">
+                        <h3>PCI DSS準拠</h3>
+                        <p>クレジットカード情報を扱う場合、PCI DSS（Payment Card Industry Data Security Standard）への準拠が必要です。</p>
+                        <ul>
+                            <li>セキュアなネットワークの構築</li>
+                            <li>カード会員データの保護</li>
+                            <li>脆弱性管理プログラムの維持</li>
+                            <li>アクセス制御の実施</li>
+                        </ul>
+                    </div>
+
+                    <div class="guideline-card warning">
+                        <h3>⚠️ CVV/CVCの取り扱い</h3>
+                        <p>セキュリティコード（CVV/CVC）は<strong>絶対に保存してはいけません</strong>。</p>
+                        <p>PCI DSSで明確に禁止されています。決済時の一時的な認証にのみ使用してください。</p>
+                    </div>
+
+                    <div class="guideline-card">
+                        <h3>推奨: トークン化</h3>
+                        <p>カード番号を直接保存する代わりに、決済代行サービスのトークン化機能を使用してください。</p>
+                        <ul>
+                            <li>Stripe</li>
+                            <li>PAY.JP</li>
+                            <li>GMOペイメントゲートウェイ</li>
+                            <li>Square</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3>デモ用カード情報</h3>
+                <div id="demoCardInfo" class="card-info-display">
+                    <p>読み込み中...</p>
+                </div>
+
+                <h3>カード番号の検証</h3>
+                <form id="cardValidateForm">
+                    <div class="form-group">
+                        <label for="cardNumber">カード番号（テスト用）</label>
+                        <input type="text" id="cardNumber" placeholder="4111111111111111" maxlength="19">
+                        <span class="hint">スペースやハイフンは自動的に除去されます</span>
+                    </div>
+                    <button type="submit" class="btn-secondary">検証する</button>
+                </form>
+                <div id="cardValidateResult"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>このシミュレーターは学習・教育目的で作成されています。</p>
+        <p>実際の金融取引には、正規の金融機関にご相談ください。</p>
+        <p>
+            <a href="https://elaws.e-gov.go.jp/" target="_blank">e-Gov法令検索</a> |
+            <a href="https://www.fsa.go.jp/" target="_blank">金融庁</a> |
+            <a href="https://www.j-fsa.or.jp/" target="_blank">日本貸金業協会</a>
+        </p>
+    </footer>
+
+    <script src="resources/js/app.js"></script>
+</body>
+</html>
